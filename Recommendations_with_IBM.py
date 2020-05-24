@@ -53,16 +53,20 @@ df_content.head()
 # 
 # Use the dictionary and cells below to provide some insight into the descriptive statistics of the data.
 # 
-# `1.` What is the distribution of how many articles a user interacts with in the dataset?  Provide a visual and descriptive statistics to assist with giving a look at the number of times each user interacts with an article.  
+# `1.` What is the distribution of how many articles a user
+# interacts with in the dataset?  #
+# Provide a visual and descriptive statistics to assist with 
+# giving a look at the number of times each user interacts with an article.  
 
 # In[ ]:
-
-
-
+# Number of interaction with article_id per email 
+# (equivalent to a user, assumption: Each user has a unique email)
+article_counts = df.groupby('email')['article_id'].count()
+article_counts.rename('num_article_id', inplace = True)
 
 
 # In[ ]:
-
+#all_df = df.set_index('article_id').join(df_content.set_index('article_id'))
 
 
 
@@ -72,8 +76,19 @@ df_content.head()
 
 # Fill in the median and maximum number of user_article interactios below
 
-median_val = # 50% of individuals interact with ____ number of articles or fewer.
-max_views_by_user = # The maximum number of user-article interactions by any 1 user is ______.
+median_val = article_counts.median()
+max_views_by_user = article_counts.max()
+
+plt.figure()
+maxbin = article_counts.max()
+plt.hist(article_counts, bins = np.arange(1, maxbin, 5))
+plt.title('Histogram of User-Article Interaction')
+plt.xlabel('Number of interacted articles')
+plt.axhline(y = median_val, color = 'red', label = 'median')
+plt.axvline(x = max_views_by_user, color = 'green', label = 'user_max_interactions')
+plt.yscale("log")
+plt.ylabel('Number of User Counts')
+plt.legend()
 
 
 # `2.` Explore and remove duplicate articles from the **df_content** dataframe.  
@@ -82,14 +97,19 @@ max_views_by_user = # The maximum number of user-article interactions by any 1 u
 
 
 # Find and explore duplicate articles
+#Count number of unique items per column:
+entries = df_content.shape[0]
+unique_articles = df_content.nunique()
+
+print('There are %d unique article_ids in df_content and there are a total of %d entries.'
+      %(unique_articles['article_id'], entries))
 
 
+print('doc_status has only the value "Live", therefore it will be removed')
+df_content.drop(labels = ['doc_status'], axis = 1, inplace = True)
 # In[ ]:
-
-
 # Remove any rows that have the same article_id - only keep the first
-
-
+df_content.drop_duplicates(subset = 'article_id', inplace = True, keep = 'first')
 # `3.` Use the cells below to find:
 # 
 # **a.** The number of unique articles that have an interaction with a user.  
@@ -105,12 +125,10 @@ max_views_by_user = # The maximum number of user-article interactions by any 1 u
 
 # In[ ]:
 
-
-unique_articles = # The number of unique articles that have at least one interaction
-total_articles = # The number of unique articles on the IBM platform
-unique_users = # The number of unique users
-user_article_interactions = # The number of user-article interactions
-
+unique_articles = df.article_id.nunique() # The number of unique articles that have at least one interaction
+total_articles = df_content.nunique()['article_id'] # The number of unique articles on the IBM platform
+unique_users = df.email.nunique()
+user_article_interactions = len(df)
 
 # `4.` Use the cells below to find the most viewed **article_id**, as well as how often it was viewed.  After talking to the company leaders, the `email_mapper` function was deemed a reasonable way to map users to ids.  There were a small number of null values, and it was found that all of these null values likely belonged to a single user (which is how they are stored using the function below).
 
@@ -123,8 +141,8 @@ user_article_interactions = # The number of user-article interactions
 # In[ ]:
 
 
-most_viewed_article_id = # The most viewed article in the dataset as a string with one value following the decimal 
-max_views = # The most viewed article in the dataset was viewed how many times?
+most_viewed_article_id = str(df.groupby('article_id')['email'].count().idxmax())# The most viewed article in the dataset as a string with one value following the decimal 
+max_views = df.groupby('article_id')['email'].count().max()# The most viewed article in the dataset was viewed how many times?
 
 
 # In[ ]:
@@ -194,7 +212,22 @@ def get_top_articles(n, df=df):
     top_articles - (list) A list of the top 'n' article titles 
     
     '''
-    # Your code here
+#    # Group "df" by article_id and count the number of user_ids per articles, sort these values in descending order
+#    sort_popular = df.groupby('article_id')['user_id'].nunique().sort_values(ascending = False)
+#    # Get the indices of the n-largest article_ids
+#    #n_largest_idx = sort_popular.nlargest(n).index
+#    n_largest_idx = sort_popular.index[:n]
+#    # Get the corresponding titles of the n_largest article_ids and create a list
+#    top_articles = df['title'].loc[n_largest_idx].tolist()
+    
+    article_index = df.article_id.value_counts().index[:n]
+    top_articles = []
+    for i in range(n):
+        article_title = df[df.article_id == article_index[i]]['title'].iloc[0]
+        top_articles.append(article_title)
+    
+    
+    
     
     return top_articles # Return the top article titles from df (not df_content)
 
@@ -208,6 +241,7 @@ def get_top_article_ids(n, df=df):
     top_articles - (list) A list of the top 'n' article titles 
     
     '''
+    top_article_indices = df.article_id.value_counts().index[:n].tolist()
     # Your code here
  
     return top_articles # Return the top article ids
@@ -252,7 +286,6 @@ t.sol_2_test(get_top_articles)
 
 # In[ ]:
 
-
 # create the user-article matrix with 1's and 0's
 
 def create_user_item_matrix(df):
@@ -268,6 +301,35 @@ def create_user_item_matrix(df):
     an article and a 0 otherwise
     '''
     # Fill in the function here
+    
+    #get the columns for the user-item matrix
+    columns = df['article_id'].unique().tolist()
+    columns = [int(x) for x in columns]
+    # get the index for the user-item-matrix
+    index = df['user_id'].unique().tolist()
+    
+    #create a new dataframe with shape = (unique users, unique article_ids)
+    new_df = pd.DataFrame(data = np.zeros(shape = (len(index), len(columns))), index = index, columns = columns)
+    
+    # find the interacted articles per user
+    unique_articles_per_user = df.groupby('user_id')['article_id'].unique()
+    
+    # loop through each user and save the interacted elements
+    for user in unique_articles_per_user.index:
+        interacted_elements = unique_articles_per_user.loc[user]
+        # Loop through the interacted elements
+        for value in interacted_elements:
+            value = int(value)
+            # Loop through the columns
+            for col in new_df.columns:
+                # If interacted_element[value] == column name, then insert "1" at this location in the new_df
+                if value == col:
+                    new_df.loc[user, value] = 1
+                else:
+                    pass
+    
+    user_item = new_df
+    
     
     return user_item # return the user_item matrix 
 
